@@ -1,4 +1,4 @@
-package com.myorg;
+package myorg;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -59,9 +59,9 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
                 return buildLexResponse(intentName, "Order number " + orderNumber + " does not exist. Please check and try again.", "Failed", sessionAttributesMap, null);
             }
 
-            String action = getOrRestoreSlot("Action", slots, sessionAttributesMap, context);
+            String action = getOrRestoreSlot("ActionType", slots, sessionAttributesMap, context);
             if (action == null || action.isEmpty()) {
-                return buildLexResponse(intentName, "How can I help you with your order ?", "InProgress", sessionAttributesMap, "Action");
+                return buildLexResponse(intentName, "How can I help you with your order ?", "InProgress", sessionAttributesMap, "ActionType");
             }
 
             if (action.equalsIgnoreCase("update shipping address")) {
@@ -74,13 +74,13 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
                 return buildLexResponse(intentName, confirmationMessage, "Fulfilled", sessionAttributesMap, null);
             }
 
-            if (action.equalsIgnoreCase("cancel order")) {
+            if (action.equalsIgnoreCase("cancel")) {
                 deleteOrder(orderNumber);
                 String confirmationMessage = "Order number " + orderNumber + " has been successfully deleted.";
                 return buildLexResponse(intentName, confirmationMessage, "Fulfilled", sessionAttributesMap, null);
             }
 
-            return buildLexResponse(intentName, "How can I help you with your order ?", "InProgress", sessionAttributesMap, "Action");
+            return buildLexResponse(intentName, "How can I help you with your order ?", "InProgress", sessionAttributesMap, "ActionType");
 
         } catch (Exception e) {
             context.getLogger().log("Error processing Lex event: " + e.getMessage());
@@ -109,7 +109,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
 
         if (slotToElicit != null && (
                 slotToElicit.equals("OrderNumber") ||
-                        slotToElicit.equals("Action") ||
+                        slotToElicit.equals("ActionType") ||
                         slotToElicit.equals("ShippingAddress"))) {
 
             dialogAction.put("type", "ElicitSlot");

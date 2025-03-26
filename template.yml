@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for Customer Support Bot Lambda function
+
+Resources:
+  CustomerSupportBotLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: myorg.SimpleHandler::handleRequest
+      Runtime: java17
+      CodeUri: ./target/customer-support-bot-0.1.jar
+      MemorySize: 1024
+      Timeout: 30
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref Clients_Database
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBReadPolicy:
+            TableName: !Ref Clients_Database
+
+  ClientsDatabase:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Clients_Database
+      AttributeDefinitions:
+        - AttributeName: order_number
+          AttributeType: N
+      KeySchema:
+        - AttributeName: order_number
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  CustomerSupportBot:
+    Type: AWS::Lex::Bot
+    Properties:
+      Name: CustomerSupportBot
+      DataPrivacy:
+        ChildDirected: false
+      IdleSessionTTLInSeconds: 300
+      RoleArn: !GetAtt LambdaExecutionRole.Arn
+      BotLocales:
+        - LocaleId: en_US
+          NluConfidenceThreshold: 0.8
+          Intents:
+            - !Ref CancelOrderIntent
+            - !Ref UpdateShippingAddressIntent
+            - !Ref ChangeOrderIntent
+            - !Ref FallbackIntent
+  CancelOrderIntent:
+    Type: AWS::Lex::Intent
+    Properties:
+      Name: CancelOrderIntent
+      Description: Handles order cancellation requests
+      FulfillmentCodeHook:
+        Enabled: true
+      Slots:
+        - Name: OrderNumber
+          SlotTypeName: AMAZON.Number
+          ValueElicitationSetting:
+            SlotConstraint: Required
+            PromptSpecification:
+              MessageGroupsList:
+                - Message:
+                    PlainTextMessage:
+                      Value: Please provide your order number.
+              MaxRetries: 2
+              AllowInterrupt: true
+      SampleUtterances:
+        - Utterance: I want to cancel my order
+        - Utterance: Cancel order {OrderNumber}
+        - Utterance: Cancel my order {OrderNumber}
+  CancelOrderIntent:
+            Type: AWS::Lex::Intent
+            Properties:
+              Name: CancelOrderIntent
+              Description: Handles order cancellation requests
+              FulfillmentCodeHook:
+                Enabled: true
+              Slots:
+                - Name: OrderNumber
+                  SlotTypeName: AMAZON.Number
+                  ValueElicitationSetting:
+                    SlotConstraint: Required
+                    PromptSpecification:
+                      MessageGroupsList:
+                        - Message:
+                            PlainTextMessage:
+                              Value: Please provide your order number.
+                      MaxRetries: 2
+                      AllowInterrupt: true
+              SampleUtterances:
+                - Utterance: I want to cancel my order
+                - Utterance: Cancel order {OrderNumber}
+                - Utterance: Cancel my order {OrderNumber}
+  CancelOrderIntent:
+    Type: AWS::Lex::Intent
+    Properties:
+      Name: CancelOrderIntent
+      Description: Handles order cancellation requests
+      FulfillmentCodeHook:
+        Enabled: true
+      Slots:
+        - Name: OrderNumber
+          SlotTypeName: AMAZON.Number
+          ValueElicitationSetting:
+            SlotConstraint: Required
+            PromptSpecification:
+              MessageGroupsList:
+                - Message:
+                    PlainTextMessage:
+                      Value: Please provide your order number.
+              MaxRetries: 2
+              AllowInterrupt: true
+      SampleUtterances:
+        - Utterance: I want to cancel my order
+        - Utterance: Cancel order {OrderNumber}
+        - Utterance: Cancel my order {OrderNumber}
+  CancelOrderIntent:
+    Type: AWS::Lex::Intent
+    Properties:
+      Name: CancelOrderIntent
+      Description: Handles order cancellation requests
+      FulfillmentCodeHook:
+        Enabled: true
+      Slots:
+        - Name: OrderNumber
+          SlotTypeName: AMAZON.Number
+          ValueElicitationSetting:
+            SlotConstraint: Required
+            PromptSpecification:
+              MessageGroupsList:
+                - Message:
+                    PlainTextMessage:
+                      Value: Please provide your order number.
+              MaxRetries: 2
+              AllowInterrupt: true
+      SampleUtterances:
+        - Utterance: I want to cancel my order
+        - Utterance: Cancel order {OrderNumber}
+        - Utterance: Cancel my order {OrderNumber}
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
+        - arn:aws:iam::aws:policy/AmazonLexFullAccess
