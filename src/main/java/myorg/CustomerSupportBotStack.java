@@ -7,7 +7,6 @@ import software.amazon.awscdk.services.dynamodb.*;
 import software.amazon.awscdk.services.lambda.Runtime;
 import software.constructs.Construct;
 import software.amazon.awscdk.services.lex.CfnBot;
-
 import java.util.List;
 import java.util.Map;
 
@@ -73,6 +72,14 @@ public class CustomerSupportBotStack extends Stack {
                                 .synonyms(List.of(
                                         CfnBot.SampleValueProperty.builder().value("delete").build()
                                 ))
+                                .build(),
+                        CfnBot.SlotTypeValueProperty.builder()
+                                .sampleValue(CfnBot.SampleValueProperty.builder().value("update_payment").build())
+                                .synonyms(List.of(
+                                        CfnBot.SampleValueProperty.builder().value("update payment method").build(),
+                                        CfnBot.SampleValueProperty.builder().value("change payment method").build(),
+                                        CfnBot.SampleValueProperty.builder().value("pay online").build()
+                                ))
                                 .build()
                 ))
                 .valueSelectionSetting(CfnBot.SlotValueSelectionSettingProperty.builder()
@@ -100,12 +107,83 @@ public class CustomerSupportBotStack extends Stack {
                         .build())
                 .build();
 
+        CfnBot.SlotTypeProperty paymentMethodSlotType = CfnBot.SlotTypeProperty.builder()
+                .name("PaymentMethodType")
+                .description("Defines the payment method for an order")
+                .slotTypeValues(List.of(
+                        CfnBot.SlotTypeValueProperty.builder()
+                                .sampleValue(CfnBot.SampleValueProperty.builder().value("on_shipment").build())
+                                .synonyms(List.of(
+                                        CfnBot.SampleValueProperty.builder().value("pay on delivery").build(),
+                                        CfnBot.SampleValueProperty.builder().value("cash on delivery").build()
+
+                                ))
+                                .build(),
+                        CfnBot.SlotTypeValueProperty.builder()
+                                .sampleValue(CfnBot.SampleValueProperty.builder().value("online").build())
+                                .synonyms(List.of(
+                                        CfnBot.SampleValueProperty.builder().value("pay online").build(),
+                                        CfnBot.SampleValueProperty.builder().value("credit card").build()
+                                ))
+                                .build()
+                ))
+                .valueSelectionSetting(CfnBot.SlotValueSelectionSettingProperty.builder()
+                        .resolutionStrategy("TOP_RESOLUTION")
+                        .build())
+                .build();
+
+
+        CfnBot.SlotProperty paymentMethodSlot = CfnBot.SlotProperty.builder()
+                .name("PaymentMethod")
+                .description("Desired payment method for the order")
+                .slotTypeName(paymentMethodSlotType.getName())
+                .valueElicitationSetting(CfnBot.SlotValueElicitationSettingProperty.builder()
+                        .slotConstraint("Optional")
+                        .promptSpecification(createPromptSpecification("What payment method would you like to use? (on_shipment or online)"))
+                        .build())
+                .build();
+
+        CfnBot.SlotProperty cardNumberSlot = CfnBot.SlotProperty.builder()
+                .name("CardNumber")
+                .description("User's credit card number")
+                .slotTypeName("AMAZON.Number")
+                .valueElicitationSetting(CfnBot.SlotValueElicitationSettingProperty.builder()
+                        .slotConstraint("Optional")
+                        .promptSpecification(createPromptSpecification("Please provide your credit card number."))
+                        .build())
+                .build();
+        CfnBot.SlotTypeProperty expirationDateSlotType = CfnBot.SlotTypeProperty.builder()
+                .name("ExpirationDateType")
+                .description("Expiration date in MM/YY format")
+                .valueSelectionSetting(CfnBot.SlotValueSelectionSettingProperty.builder()
+                        .resolutionStrategy("ORIGINAL_VALUE")
+                        .build())
+                .build();
+
+        CfnBot.SlotProperty expirationDateSlot = CfnBot.SlotProperty.builder()
+                .name("ExpirationDate")
+                .description("Expiration date of the credit card")
+                .slotTypeName(expirationDateSlotType.getName())
+                .valueElicitationSetting(CfnBot.SlotValueElicitationSettingProperty.builder()
+                        .slotConstraint("Optional")
+                        .promptSpecification(createPromptSpecification("Please provide the expiration date of your card in MM/YY format (e.g., 12/25)."))
+                        .build())
+                .build();
+        CfnBot.SlotProperty cvvSlot = CfnBot.SlotProperty.builder()
+                .name("CVV")
+                .description("CVV code of the credit card")
+                .slotTypeName("AMAZON.Number")
+                .valueElicitationSetting(CfnBot.SlotValueElicitationSettingProperty.builder()
+                        .slotConstraint("Optional")
+                        .promptSpecification(createPromptSpecification("Please provide the CVV code of your card (3 digits on the back of your card)."))
+                        .build())
+                .build();
         CfnBot.BotLocaleProperty botLocale = CfnBot.BotLocaleProperty.builder()
                 .localeId("en_US")
                 .nluConfidenceThreshold(0.8)
-                .slotTypes(List.of(actionSlotType))
+                .slotTypes(List.of(actionSlotType, paymentMethodSlotType, expirationDateSlotType))
                 .intents(List.of(
-                        createChangeOrderIntent(orderNumberSlot,actionTypeSlot,shippingAddressSlot),
+                        createChangeOrderIntent(orderNumberSlot,actionTypeSlot,shippingAddressSlot,paymentMethodSlot,cvvSlot,expirationDateSlot,cardNumberSlot),
                         createFallbackIntent()
                 ))
                 .voiceSettings(CfnBot.VoiceSettingsProperty.builder()
@@ -123,15 +201,20 @@ public class CustomerSupportBotStack extends Stack {
 
     }
 
-    private CfnBot.IntentProperty createChangeOrderIntent(CfnBot.SlotProperty orderNumberSlot,CfnBot.SlotProperty actionTypeSlot, CfnBot.SlotProperty shippingAddressSlot) {
+    private CfnBot.IntentProperty createChangeOrderIntent(CfnBot.SlotProperty orderNumberSlot,CfnBot.SlotProperty actionTypeSlot,CfnBot.SlotProperty shippingAddressSlot,CfnBot.SlotProperty paymentMethodSlot,CfnBot.SlotProperty cvvSlot, CfnBot.SlotProperty expirationSlot, CfnBot.SlotProperty cardNumberSlot) {
         return CfnBot.IntentProperty.builder()
                 .name("ChangeOrderIntent")
                 .description("Acts as a router for order modifications")
-                .slots(List.of(orderNumberSlot,actionTypeSlot,shippingAddressSlot))
+                .slots(List.of(orderNumberSlot,actionTypeSlot,shippingAddressSlot,paymentMethodSlot,cvvSlot,expirationSlot,cardNumberSlot))
                 .slotPriorities(List.of(
                         CfnBot.SlotPriorityProperty.builder().priority(1).slotName("OrderNumber").build(),
                         CfnBot.SlotPriorityProperty.builder().priority(2).slotName("ActionType").build(),
-                        CfnBot.SlotPriorityProperty.builder().priority(3).slotName("ShippingAddress").build()
+                        CfnBot.SlotPriorityProperty.builder().priority(3).slotName("ShippingAddress").build(),
+                        CfnBot.SlotPriorityProperty.builder().priority(4).slotName("PaymentMethod").build(),
+                        CfnBot.SlotPriorityProperty.builder().priority(5).slotName("CardNumber").build(),
+                        CfnBot.SlotPriorityProperty.builder().priority(6).slotName("ExpirationDate").build(),
+                        CfnBot.SlotPriorityProperty.builder().priority(7).slotName("CVV").build()
+
                 ))
                 .sampleUtterances(List.of(
                         CfnBot.SampleUtteranceProperty.builder().utterance("I want to change my order").build(),
@@ -143,7 +226,10 @@ public class CustomerSupportBotStack extends Stack {
                         CfnBot.SampleUtteranceProperty.builder().utterance("I want to {ActionType} with number {OrderNumber}").build(),
                         CfnBot.SampleUtteranceProperty.builder().utterance("I want to {ActionType} my order").build(),
                         CfnBot.SampleUtteranceProperty.builder().utterance("I need to {ActionType} my order").build(),
-                        CfnBot.SampleUtteranceProperty.builder().utterance("help me with {ActionType} my order").build()
+                        CfnBot.SampleUtteranceProperty.builder().utterance("help me with {ActionType} my order").build(),
+                        CfnBot.SampleUtteranceProperty.builder().utterance("Update payment method to {PaymentMethod} for order {OrderNumber}").build(),
+                        CfnBot.SampleUtteranceProperty.builder().utterance("Change payment to {PaymentMethod}").build(),
+                        CfnBot.SampleUtteranceProperty.builder().utterance("I want to pay {PaymentMethod} for order {OrderNumber}").build()
 
                         ))
                 .dialogCodeHook(CfnBot.DialogCodeHookSettingProperty.builder()

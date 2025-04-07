@@ -10,12 +10,19 @@ import software.amazon.awssdk.services.dynamodb.model.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
 
 public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
     private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
     private static final String TABLE_NAME = "Clients_Database";
-
+    private static final String ALGOBOOK_API_KEY = "6617961216msh17b4859478138bcp17d8f3jsn9ca072fb9a3d"; // Replace with your RapidAPI key
+    private static final String ALGOBOOK_API_HOST = "credit-card-validation-api-algobook.p.rapidapi.com";
+    private final HttpClient httpClient = HttpClient.newHttpClient();
     @Override
     public Map<String, Object> handleRequest(Map<String, Object> event, Context context) {
         ObjectMapper objectMapper = new ObjectMapper();
@@ -55,7 +62,8 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
                 return buildLexResponse(intentName, "Invalid order number format. Please provide a valid order number.", "InProgress", sessionAttributesMap, "OrderNumber");
             }
 
-            if (!orderExists(orderNumber)) {
+            Map<String, AttributeValue> orderItem = getOrderItem(orderNumber);
+            if (orderItem == null) {
                 return buildLexResponse(intentName, "Order number " + orderNumber + " does not exist. Please check and try again.", "Failed", sessionAttributesMap, null);
             }
 
@@ -79,7 +87,44 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
                 String confirmationMessage = "Order number " + orderNumber + " has been successfully deleted.";
                 return buildLexResponse(intentName, confirmationMessage, "Fulfilled", sessionAttributesMap, null);
             }
+            if (action.equalsIgnoreCase("update_payment")) {
+                String paymentMethod = orderItem.get("payment method").s();
+                context.getLogger().log("Processing update_payment for payment method: " + paymentMethod);
+                if (paymentMethod.equalsIgnoreCase("online")) {
+                    return buildLexResponse(intentName, "The order with number " + orderNumber + " has already been paid online.", "Fulfilled", sessionAttributesMap, null);
+                } else if (paymentMethod.equalsIgnoreCase("on_shipment")) {
+                    String cardNumber = getOrRestoreSlot("CardNumber", slots, sessionAttributesMap, context);
+                    if (cardNumber == null || cardNumber.isEmpty()) {
+                        return buildLexResponse(intentName, "Please provide your credit card number to fulfill the payment.", "InProgress", sessionAttributesMap, "CardNumber");
+                    }
 
+                    String expirationDate = getOrRestoreSlot("ExpirationDate", slots, sessionAttributesMap, context);
+                    if (expirationDate == null || expirationDate.isEmpty()) {
+                        return buildLexResponse(intentName, "Please provide the expiration date of your card in MM/YY format (e.g., 12/25).", "InProgress", sessionAttributesMap, "ExpirationDate");
+                    }
+
+                    String cvv = getOrRestoreSlot("CVV", slots, sessionAttributesMap, context);
+                    if (cvv == null || cvv.isEmpty()) {
+                        return buildLexResponse(intentName, "Please provide the CVV code of your card (3 digits for most cards, 4 digits for American Express).", "InProgress", sessionAttributesMap, "CVV");
+                    }
+
+                    context.getLogger().log("Calling validateCreditCard with card: " + cardNumber + " and CVV: " + cvv);
+                    boolean isCardValid = validateCreditCard(cardNumber, cvv, context);
+                    if (!isCardValid) {
+                        boolean isAmex = cardNumber.startsWith("34") || cardNumber.startsWith("37");
+                        String cvvRequirement = isAmex ? "4-digit CVV" : "3-digit CVV";
+                        context.getLogger().log("Card validation failed, prompting for " + cvvRequirement);
+                        return buildLexResponse(intentName,
+                                "Invalid credit card details. Please ensure you're using a valid card number and " + cvvRequirement + ".",
+                                "InProgress", sessionAttributesMap, "CVV");
+                    }
+
+                    updatePaymentMethod(orderNumber, "online");
+                    return buildLexResponse(intentName, "Your order has been paid successfully.", "Fulfilled", sessionAttributesMap, null);
+                } else {
+                    return buildLexResponse(intentName, "Unknown payment method for order " + orderNumber + ". Please contact support.", "Failed", sessionAttributesMap, null);
+                }
+            }
             return buildLexResponse(intentName, "How can I help you with your order ?", "InProgress", sessionAttributesMap, "ActionType");
 
         } catch (Exception e) {
@@ -107,14 +152,12 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
     private Map<String, Object> buildLexResponse(String intentName, String message, String intentState, Map<String, Object> sessionAttributes, String slotToElicit) {
         Map<String, Object> dialogAction = new HashMap<>();
 
-        if (slotToElicit != null && (
-                slotToElicit.equals("OrderNumber") ||
-                        slotToElicit.equals("ActionType") ||
-                        slotToElicit.equals("ShippingAddress"))) {
+        if (slotToElicit != null && (slotToElicit.equals("OrderNumber") || slotToElicit.equals("ActionType") || slotToElicit.equals("ShippingAddress")|| slotToElicit.equals("PaymentMethod") || slotToElicit.equals("CardNumber") ||
+                slotToElicit.equals("ExpirationDate") ||  slotToElicit.equals("CVV")))
 
-            dialogAction.put("type", "ElicitSlot");
-            dialogAction.put("slotToElicit", slotToElicit);
-        } else {
+        {   dialogAction.put("type", "ElicitSlot");
+            dialogAction.put("slotToElicit", slotToElicit);}
+         else {
             dialogAction.put("type", "Close");
         }
 
@@ -139,13 +182,16 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
         );
     }
 
-    private boolean orderExists(int orderNumber) {
+    private Map<String, AttributeValue> getOrderItem(int orderNumber) {
         GetItemRequest request = GetItemRequest.builder()
                 .tableName(TABLE_NAME)
                 .key(Map.of("order_number", AttributeValue.builder().n(String.valueOf(orderNumber)).build()))
                 .build();
         GetItemResponse response = dynamoDbClient.getItem(request);
-        return response.hasItem();
+        if (response.hasItem()) {
+            return response.item();
+        }
+        return null;
     }
 
     private void deleteOrder(int orderNumber) {
@@ -173,6 +219,94 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
                 .key(key)
                 .updateExpression("SET shipping_address = :newAddress")
                 .expressionAttributeValues(attributeValues)
+                .build();
+
+        dynamoDbClient.updateItem(request);
+    }
+    private boolean validateCreditCard(String cardNumber, String cvv, Context context) {
+        context.getLogger().log("Entering validateCreditCard with card: " + cardNumber + " and CVV: " + cvv);
+        try {
+            if (cardNumber == null || cardNumber.length() < 13 || cardNumber.length() > 19) {
+                context.getLogger().log("Invalid card number length: " + (cardNumber != null ? cardNumber.length() : "null"));
+                return false;
+            }
+            if (cvv == null || cvv.isEmpty()) {
+                context.getLogger().log("CVV is null or empty");
+                return false;
+            }
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://credit-card-validation-api-algobook.p.rapidapi.com/v1/card/verify?number=" + cardNumber))
+                    .header("X-RapidAPI-Host", ALGOBOOK_API_HOST)
+                    .header("X-RapidAPI-Key", ALGOBOOK_API_KEY)
+                    .method("GET", HttpRequest.BodyPublishers.noBody())
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            context.getLogger().log("API Status: " + response.statusCode());
+            context.getLogger().log("Algobook API Response: " + response.body());
+
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode responseNode = mapper.readTree(response.body());
+
+            JsonNode isValidNode = responseNode.path("valid");
+            if (!isValidNode.asBoolean(false)) {
+                context.getLogger().log("Card number validation failed via API");
+                return false;
+            }
+
+            JsonNode cardTypeNode = responseNode.path("cardType");
+            String cardType = cardTypeNode.asText("UNKNOWN");
+            String cleanCvv = cvv.replaceAll("[^0-9]", "");
+
+            context.getLogger().log("Card type identified as: " + cardType);
+            context.getLogger().log("CVV provided: " + cleanCvv + " (length: " + cleanCvv.length() + ")");
+
+            boolean isAmex = cardType.equalsIgnoreCase("American Express") ||
+                    cardNumber.startsWith("34") ||
+                    cardNumber.startsWith("37");
+
+            if (isAmex) {
+                if (cleanCvv.length() != 4) {
+                    context.getLogger().log("Validation failed: American Express requires 4-digit CVV, got " + cleanCvv.length());
+                    return false;
+                }
+            } else {
+                if (cleanCvv.length() != 3) {
+                    context.getLogger().log("Validation failed: " + cardType + " requires 3-digit CVV, got " + cleanCvv.length());
+                    return false;
+                }
+            }
+
+            if (!cleanCvv.matches("\\d+")) {
+                context.getLogger().log("Validation failed: CVV contains invalid characters: " + cleanCvv);
+                return false;
+            }
+
+            context.getLogger().log("Credit card and CVV validation successful");
+            return true;
+        } catch (Exception e) {
+            context.getLogger().log("Error validating credit card: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void updatePaymentMethod(int orderNumber, String newPaymentMethod) {
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put("order_number", AttributeValue.builder().n(String.valueOf(orderNumber)).build());
+
+        Map<String, AttributeValue> attributeValues = new HashMap<>();
+        attributeValues.put(":newPaymentMethod", AttributeValue.builder().s(newPaymentMethod).build());
+
+        Map<String, String> expressionAttributeNames = new HashMap<>();
+        expressionAttributeNames.put("#pm", "payment method");
+
+        UpdateItemRequest request = UpdateItemRequest.builder()
+                .tableName(TABLE_NAME)
+                .key(key)
+                .updateExpression("SET #pm = :newPaymentMethod")
+                .expressionAttributeValues(attributeValues)
+                .expressionAttributeNames(expressionAttributeNames)
                 .build();
 
         dynamoDbClient.updateItem(request);
