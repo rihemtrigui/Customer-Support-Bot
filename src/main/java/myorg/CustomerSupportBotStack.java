@@ -7,6 +7,8 @@ import software.amazon.awscdk.services.dynamodb.*;
 import software.amazon.awscdk.services.lambda.Runtime;
 import software.constructs.Construct;
 import software.amazon.awscdk.services.lex.CfnBot;
+
+
 import java.util.List;
 import java.util.Map;
 
@@ -28,23 +30,32 @@ public class CustomerSupportBotStack extends Stack {
         lambdaRole.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
                 .actions(List.of(
-                        "s3:GetObject",  // Allow reading objects from the bucket
-                        "s3:ListBucket"  // Allow listing objects in the bucket (optional, for listing grammar files)
+                        "s3:GetObject",
+                        "s3:ListBucket"
                 ))
                 .resources(List.of(
-                        "arn:aws:s3:::hpgrammar",       // Bucket-level permission (for ListBucket)
-                        "arn:aws:s3:::hpgrammar/*"      // Object-level permission (for GetObject)
+                        "arn:aws:s3:::hpgrammar",
+                        "arn:aws:s3:::hpgrammar/*"
                 ))
                 .build());
 
         Clients_Database.grantFullAccess(lambdaRole);
+
+        lambdaRole.addToPolicy(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .actions(List.of(
+                        "ses:SendEmail",
+                        "ses:SendRawEmail"
+                ))
+                .resources(List.of("*"))
+                .build());
 
         Function SimpleHandler = Function.Builder.create(this, "SimpleHandler")
                 .runtime(Runtime.JAVA_17)
                 .handler("myorg.SimpleHandler::handleRequest")
                 .code(Code.fromAsset("target/customer-support-bot-0.1.jar"))
                 .memorySize(2048)
-                .timeout(Duration.seconds(300))
+                .timeout(Duration.seconds(400))
                 .role(lambdaRole)
                 .layers(List.of(layer))
                 .environment(Map.of(
@@ -69,12 +80,12 @@ public class CustomerSupportBotStack extends Stack {
         lexRole.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
                 .actions(List.of(
-                        "s3:GetObject",  // Allow reading GRXML files
-                        "s3:ListBucket"  // Allow listing objects in the bucket (optional)
+                        "s3:GetObject",
+                        "s3:ListBucket"
                 ))
                 .resources(List.of(
-                        "arn:aws:s3:::hpgrammar",       // Bucket-level permission (for ListBucket)
-                        "arn:aws:s3:::hpgrammar/*"      // Object-level permission (for GetObject)
+                        "arn:aws:s3:::hpgrammar",
+                        "arn:aws:s3:::hpgrammar/*"
                 ))
                 .build());
 
@@ -152,19 +163,17 @@ public class CustomerSupportBotStack extends Stack {
                 .description("Defines the payment method for an order")
                 .slotTypeValues(List.of(
                         CfnBot.SlotTypeValueProperty.builder()
-                                .sampleValue(CfnBot.SampleValueProperty.builder().value("on_shipment").build())
+                                .sampleValue(CfnBot.SampleValueProperty.builder().value("card").build())
                                 .synonyms(List.of(
                                         CfnBot.SampleValueProperty.builder().value("pay on delivery").build(),
-                                        CfnBot.SampleValueProperty.builder().value("cash on delivery").build(),
-                                        CfnBot.SampleValueProperty.builder().value("cash").build()
+                                        CfnBot.SampleValueProperty.builder().value("cash on delivery").build()
                                         ))
                                 .build(),
                         CfnBot.SlotTypeValueProperty.builder()
-                                .sampleValue(CfnBot.SampleValueProperty.builder().value("online").build())
+                                .sampleValue(CfnBot.SampleValueProperty.builder().value("cash").build())
                                 .synonyms(List.of(
                                         CfnBot.SampleValueProperty.builder().value("pay online").build(),
-                                        CfnBot.SampleValueProperty.builder().value("credit card").build(),
-                                        CfnBot.SampleValueProperty.builder().value("card").build()
+                                        CfnBot.SampleValueProperty.builder().value("credit card").build()
                                         ))
                                 .build()
                 ))

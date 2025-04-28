@@ -7,8 +7,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
+import software.amazon.awssdk.services.ses.SesClient;
+import software.amazon.awssdk.services.ses.model.*;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -19,10 +23,14 @@ import java.net.http.HttpResponse;
 public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
     private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
-    private static final String TABLE_NAME = "Clients_Database";
-    private static final String ALGOBOOK_API_KEY = "6617961216msh17b4859478138bcp17d8f3jsn9ca072fb9a3d"; // Replace with your RapidAPI key
-    private static final String ALGOBOOK_API_HOST = "credit-card-validation-api-algobook.p.rapidapi.com";
     private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final SesClient sesClient = SesClient.create();
+    private static final String TABLE_NAME = "Clients_Database";
+    private static final String ALGOBOOK_API_KEY = "6617961216msh17b4859478138bcp17d8f3jsn9ca072fb9a3d";
+    private static final String ALGOBOOK_API_HOST = "credit-card-validation-api-algobook.p.rapidapi.com";
+    private static final String SENDER_EMAIL = "noreply.hpassistance@gmail.com";
+    private static final String RECEIVER_EMAIL = "triguirihem13@gmail.com";
+
     @Override
     public Map<String, Object> handleRequest(Map<String, Object> event, Context context) {
         ObjectMapper objectMapper = new ObjectMapper();
@@ -95,6 +103,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
         if (shippingAddress == null || shippingAddress.isEmpty()) {
             return buildLexResponse(intentName, "Please provide your shipping address.", "InProgress", sessionAttributesMap, "ShippingAddress");
         }
+
         String email = getOrRestoreSlot("Email", slots, sessionAttributesMap, context);
         if (email == null || email.isEmpty()) {
             return buildLexResponse(intentName, "Please provide your email address.", "InProgress", sessionAttributesMap, "Email");
@@ -102,7 +111,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
 
         String paymentMethod = getOrRestoreSlot("PaymentMethod", slots, sessionAttributesMap, context);
         if (paymentMethod == null || paymentMethod.isEmpty()) {
-            return buildLexResponse(intentName, "How would you like to pay? You can choose between cash on delivery or online payment with a card.", "InProgress", sessionAttributesMap, "PaymentMethod");
+            return buildLexResponse(intentName, "How would you like to pay ? You can choose between cash on delivery or online payment with a card.", "InProgress", sessionAttributesMap, "PaymentMethod");
         }
 
         String cardNumber = null;
@@ -154,6 +163,14 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
                 .item(item)
                 .build();
         dynamoDbClient.putItem(putRequest);
+
+        String subject = "Order Confirmation - Order #" + orderNumber;
+        String body = String.format(
+                "Dear %s,\n\nYour order has been successfully placed!\n\nOrder Details:\n- Order Number: #%d\n- Product: %s %s %s\n- Payment Method: %s\n- Shipping Address: %s\n\nThank you for shopping with us!",
+                clientName, orderNumber, products, productName, productNumber != null ? productNumber : "N/A", paymentMethod, shippingAddress
+        );
+
+        sendEmail(email, subject, body, context);
 
         String confirmationMessage = String.format(
                 "Your order has been successfully placed ! Your order number is #%d ",
@@ -403,6 +420,115 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             context.getLogger().log("Error validating credit card: " + e.getMessage());
             return false;
         }
+    }
+    private boolean sendEmail(String toEmail, String subject, String body, Context context) {
+        int retries = 3;
+        for (int i = 0; i < retries; i++) {
+            try {
+                String recipientEmail = RECEIVER_EMAIL;
+                Destination destination = Destination.builder()
+                        .toAddresses(recipientEmail)
+                        .build();
+                String greeting = "";
+                String mainMessage = "";
+                Map<String, String> orderDetails = new LinkedHashMap<>();
+                String[] lines = body.split("\n");
+                boolean inOrderDetails = false;
+                for (String line : lines) {
+                    line = line.trim();
+                    if (line.isEmpty()) continue;
+                    if (line.startsWith("Dear")) {
+                        greeting = line;
+                    } else if (line.equals("Order Details:")) {
+                        inOrderDetails = true;
+                    } else if (inOrderDetails && line.startsWith("-")) {
+                        String[] parts = line.substring(2).split(":", 2);
+                        if (parts.length == 2) {
+                            orderDetails.put(parts[0].trim(), parts[1].trim());
+                        }
+                    } else if (!line.equals("Order Details:") && !inOrderDetails) {
+                        mainMessage += (mainMessage.isEmpty() ? "" : "<br>") + line;
+                    }
+                }
+
+                StringBuilder orderDetailsHtml = new StringBuilder();
+                if (!orderDetails.isEmpty()) {
+                    orderDetailsHtml.append("<h2 style=\"font-size: 18px; color: #0096D6; margin: 20px 0 10px;\">Order Details</h2>")
+                            .append("<table border=\"0\" cellpadding=\"8\" cellspacing=\"0\" width=\"100%\" style=\"background-color: #F9F9F9; border: 1px solid #E0E0E0;\">");
+                    for (Map.Entry<String, String> entry : orderDetails.entrySet()) {
+                        orderDetailsHtml.append("<tr>")
+                                .append("<td style=\"font-size: 14px; font-weight: bold; color: #333333;\">").append(entry.getKey()).append(":</td>")
+                                .append("<td style=\"font-size: 14px; color: #333333;\">").append(entry.getValue()).append("</td>")
+                                .append("</tr>");
+                    }
+                    orderDetailsHtml.append("</table>");
+                }
+
+                String htmlBody = "<!DOCTYPE html>" +
+                        "<html>" +
+                        "<head>" +
+                        "<meta charset=\"UTF-8\">" +
+                        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">" +
+                        "<title>" + subject + "</title>" +
+                        "</head>" +
+                        "<body style=\"margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #F5F5F5; color: #333333;\">" +
+                        "<table align=\"center\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"max-width: 600px; background-color: #FFFFFF; border: 1px solid #E0E0E0;\">" +
+                        "<tr>" +
+                        "<td style=\"padding: 20px; text-align: center; background-color: #0096D6;\">" +
+                        "<img src=\"https://logo-marque.com/wp-content/uploads/2020/12/Hewlett-Packard-Logo-2008-2014.png\" alt=\"HP Logo\" style=\"max-width: 150px;\">" +
+                        "<h1 style=\"color: #FFFFFF; font-size: 24px; margin: 10px 0;\">" + subject + "</h1>" +
+                        "</td>" +
+                        "</tr>" +
+                        "<tr>" +
+                        "<td style=\"padding: 20px;\">" +
+                        "<p style=\"font-size: 16px; line-height: 1.5;\">" + greeting + "</p>" +
+                        "<p style=\"font-size: 16px; line-height: 1.5;\">" + mainMessage + "</p>" +
+                        orderDetailsHtml.toString() +
+                        "</td>" +
+                        "</tr>" +
+                        "<tr>" +
+                        "<td style=\"padding: 20px; text-align: center; background-color: #F5F5F5; border-top: 1px solid #E0E0E0;\">" +
+                        "<p style=\"font-size: 14px; line-height: 1.5; color: #666666; margin: 0;\">Thank you for shopping with us!</p>" +
+                        "<p style=\"font-size: 14px; line-height: 1.5; color: #666666; margin: 5px 0;\">HP SmartBot Team</p>" +
+                        "<p style=\"font-size: 14px; line-height: 1.5; color: #666666; margin: 0;\">Contact us at: <a href=\"mailto:support@hp.com\" style=\"color: #0096D6; text-decoration: none;\">support@hp.com</a></p>" +
+                        "</td>" +
+                        "</tr>" +
+                        "</table>" +
+                        "</body>" +
+                        "</html>";
+
+                Message message = Message.builder()
+                        .subject(Content.builder().data(subject).build())
+                        .body(Body.builder()
+                                .text(Content.builder().data(body).build())
+                                .html(Content.builder().data(htmlBody).build())
+                                .build())
+                        .build();
+
+                SendEmailRequest emailRequest = SendEmailRequest.builder()
+                        .source(SENDER_EMAIL)
+                        .destination(destination)
+                        .message(message)
+                        .build();
+
+                sesClient.sendEmail(emailRequest);
+                context.getLogger().log("Email sent successfully to " + recipientEmail);
+                return true;
+            } catch (Exception e) {
+                context.getLogger().log("Attempt " + (i + 1) + " failed: Error sending email to " + toEmail + ": " + e.getMessage());
+                context.getLogger().log("Stack trace: " + Arrays.toString(e.getStackTrace()));
+                if (i == retries - 1) {
+                    context.getLogger().log("All retries failed for sending email to " + toEmail);
+                    return false;
+                }
+                try {
+                    Thread.sleep(1000 * (i + 1));
+                } catch (InterruptedException ie) {
+                    context.getLogger().log("Retry interrupted: " + ie.getMessage());
+                }
+            }
+        }
+        return false;
     }
 
     private void updatePaymentMethod(int orderNumber, String newPaymentMethod) {
