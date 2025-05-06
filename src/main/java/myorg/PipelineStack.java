@@ -10,7 +10,6 @@ import software.amazon.awscdk.services.codecommit.IRepository;
 import software.amazon.awscdk.services.codecommit.Repository;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.PolicyStatement;
-import software.amazon.awscdk.services.s3.Bucket;
 import software.constructs.Construct;
 import java.util.Arrays;
 
@@ -84,7 +83,6 @@ public class PipelineStack extends Stack {
                                                 "arn:aws:s3:::*"
                                         ))
                                         .build(),
-                                // CDK bootstrap bucket permissions
                                 PolicyStatement.Builder.create()
                                         .effect(Effect.ALLOW)
                                         .actions(Arrays.asList(
