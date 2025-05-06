@@ -4,6 +4,7 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 
+
 public class CustomerSupportBotApp {
     public static void main(final String[] args) {
         App app = new App();
@@ -15,6 +16,10 @@ public class CustomerSupportBotApp {
         new CustomerSupportBotStack(app, "CustomerSupportBotStack", StackProps.builder()
                 .env(environment)
                 .build());
+        new PipelineStack(app, "PipelineStack", StackProps.builder()
+                .env(environment)
+                .build());
+
         app.synth();
     }
 }
