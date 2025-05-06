@@ -16,7 +16,7 @@ import java.util.Map;
 public class CustomerSupportBotStack extends Stack {
     public CustomerSupportBotStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
-        ILayerVersion layer = LayerVersion.fromLayerVersionArn(this, "BotDependencies", "arn:aws:lambda:us-east-1:960673175457:layer:BotDependencies:7");
+        ILayerVersion layer = LayerVersion.fromLayerVersionArn(this, "BotDependencies", "arn:aws:lambda:us-east-1:960673175457:layer:BotDependencies:11");
         ITable Clients_Database = Table.fromTableName(this, "Clients_Database", "Clients_Database");
         IFunction RAGFAQHandler = Function.fromFunctionArn(this, "ImportedRAGFAQHandler",
                 "arn:aws:lambda:us-east-1:960673175457:function:faq_handler");
