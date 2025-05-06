@@ -42,7 +42,6 @@ public class PipelineStack extends Stack {
                         "echo Checking AWS account settings...",
                         "aws sts get-caller-identity",
                         "echo Bootstrapping AWS environment if needed...",
-                        "npx cdk bootstrap",  // Bootstrap the environment if not already done
                         "npx cdk synth"
                 ))
                 .primaryOutputDirectory("cdk.out")  // Specify the output directory
