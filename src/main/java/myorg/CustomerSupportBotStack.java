@@ -86,7 +86,7 @@ public class CustomerSupportBotStack extends Stack {
                 Permission.builder()
                         .principal(new ServicePrincipal("lex.amazonaws.com"))
                         .action("lambda:InvokeFunction")
-                        .sourceArn("arn:aws:lex:us-east-1:960673175457:bot-alias/YJPJLY5XGP/TSTALIASID")
+                        .sourceArn("arn:aws:lex:us-east-1:960673175457:bot-alias/FPQPGFR9ZU/TSTALIASID")
                         .build()
         );
         SimpleHandler.addPermission("InvokeFAQHandlerPermission",
@@ -101,7 +101,7 @@ public class CustomerSupportBotStack extends Stack {
                 Permission.builder()
                         .principal(new ServicePrincipal("lex.amazonaws.com"))
                         .action("lambda:InvokeFunction")
-                        .sourceArn("arn:aws:lex:us-east-1:960673175457:bot-alias/YJPJLY5XGP/TSTALIASID")
+                        .sourceArn("arn:aws:lex:us-east-1:960673175457:bot-alias/FPQPGFR9ZU/TSTALIASID")
                         .build()
         );
 
