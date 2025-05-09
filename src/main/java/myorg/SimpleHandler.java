@@ -768,7 +768,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
 
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://credit-card-validator2.p.rapidapi.com/validate-credit-card" + cardNumber))
+                    .uri(URI.create("https://credit-card-validator2.p.rapidapi.com/validate-credit-card"))
                     .header("X-RapidAPI-Host", ALGOBOOK_API_HOST)
                     .header("X-RapidAPI-Key", ALGOBOOK_API_KEY)
                     .header("Content-Type", "application/json")
