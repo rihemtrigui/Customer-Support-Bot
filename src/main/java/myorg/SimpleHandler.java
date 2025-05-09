@@ -27,14 +27,14 @@ import java.net.http.HttpResponse;
 import java.util.stream.Collectors;
 
 public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
-    private final LambdaClient lambdaClient = LambdaClient.create();  // Add this line
+    private final LambdaClient lambdaClient = LambdaClient.create();
     private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final SesClient sesClient = SesClient.create();
     private static final String FAQ_HANDLER_ARN = "arn:aws:lambda:us-east-1:960673175457:function:faq_handler";
     private static final String TABLE_NAME = "Clients_Database";
     private static final String ALGOBOOK_API_KEY = "6617961216msh17b4859478138bcp17d8f3jsn9ca072fb9a3d";
-    private static final String ALGOBOOK_API_HOST = "credit-card-validation-api-algobook.p.rapidapi.com";
+    private static final String ALGOBOOK_API_HOST = "credit-card-validator2.p.rapidapi.com";
     private static final String SENDER_EMAIL = "noreply.hpassistance@gmail.com";
     private static final String RECEIVER_EMAIL = "triguirihem13@gmail.com";
     private static final ObjectMapper objectMapper = new ObjectMapper();
@@ -763,23 +763,25 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
                 context.getLogger().log("CVV is null or empty");
                 return false;
             }
+            String requestBody = objectMapper.writeValueAsString(Map.of("cardNumber", cardNumber));
+            context.getLogger().log("Request body: " + requestBody);
+
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://credit-card-validation-api-algobook.p.rapidapi.com/v1/card/verify?number=" + cardNumber))
+                    .uri(URI.create("https://credit-card-validator2.p.rapidapi.com/validate-credit-card" + cardNumber))
                     .header("X-RapidAPI-Host", ALGOBOOK_API_HOST)
                     .header("X-RapidAPI-Key", ALGOBOOK_API_KEY)
-                    .method("GET", HttpRequest.BodyPublishers.noBody())
+                    .header("Content-Type", "application/json")
+                    .method("POST", HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             context.getLogger().log("API Status: " + response.statusCode());
-            context.getLogger().log("Algobook API Response: " + response.body());
+            context.getLogger().log("API Response: " + response.body());
 
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode responseNode = mapper.readTree(response.body());
-
-            JsonNode isValidNode = responseNode.path("valid");
-            if (!isValidNode.asBoolean(false)) {
+            JsonNode responseNode = objectMapper.readTree(response.body());
+            boolean isValid = responseNode.path("isValid").asBoolean(false);
+            if (!isValid) {
                 context.getLogger().log("Card number validation failed via API");
                 return false;
             }
