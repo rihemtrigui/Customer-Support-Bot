@@ -175,7 +175,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             );
         } catch (Exception e) {
             context.getLogger().log("Error invoking FAQHandler: " + e.getMessage());
-            return buildLexResponse("FAQIntent", "Sorry, there was an error processing your FAQ request.", "Failed", sessionAttributesMap, null);
+            return buildLexResponse("FAQIntent", "Sorry, there was an error processing your request.", "Failed", sessionAttributesMap, null);
         }
     }
     private Map<String, Object> handleOrderHPItemIntent(String intentName, Map<String, Object> slots, Map<String, Object> sessionAttributesMap, Context context) {
@@ -246,11 +246,9 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             }
         }
 
-        // All order slots are filled, check if SuggestionResponse is filled
         String suggestionResponse = getOrRestoreSlot("SuggestionResponse", slots, sessionAttributesMap, context);
 
         if (suggestionResponse == null) {
-            // Place the order and elicit SuggestionResponse
             int orderNumber = generateOrderNumber();
 
             Map<String, AttributeValue> item = new HashMap<>();
@@ -278,18 +276,16 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             sendEmail(email, subject, body, context);
 
             String confirmationMessage = String.format(
-                    "Your order has been successfully placed! Your order number is #%d.",
+                    "Your order has been successfully placed ! Your order number is #%d.",
                     orderNumber
             );
 
-            // Compute SuggestedURL and store for later use
             String suggestedURL = getSuggestedURL(products);
             sessionAttributesMap.put("SuggestedURL", suggestedURL);
             sessionAttributesMap.put("Products", products);
             sessionAttributesMap.put("orderNumber", String.valueOf(orderNumber));
             context.getLogger().log("Set SuggestedURL in session attributes: " + suggestedURL);
 
-            // Elicit SuggestionResponse with a plain-text message followed by an ImageResponseCard
             JsonNode card = getRelatedArticleCard(products, String.valueOf(orderNumber));
             return buildLexResponseWithTextAndCard(
                     intentName,
@@ -301,7 +297,6 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             );
         }
 
-        // SuggestionResponse is filled, handle the response and close the dialog
         String cleanResponse = suggestionResponse.replace("\"", "").trim().toLowerCase();
         context.getLogger().log("Cleaned SuggestionResponse: " + cleanResponse);
 
@@ -320,11 +315,9 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             context.getLogger().log("Found SuggestedURL in session attributes: " + suggestedURL);
         }
 
-        // Retrieve orderNumber from session attributes
         String orderNumberStr = (String) sessionAttributesMap.get("orderNumber");
         int orderNumber = orderNumberStr != null ? Integer.parseInt(orderNumberStr) : 0;
 
-        // Clean up session attributes
         sessionAttributesMap.remove("SuggestedURL");
         sessionAttributesMap.remove("Products");
         sessionAttributesMap.remove("orderNumber");
@@ -441,12 +434,12 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
     }
 
     private Map<String, Object> handleGreetingsIntent(String intentName, Map<String, Object> slots, Map<String, Object> sessionAttributesMap, Context context) {
-        String greetingMessage = "Hello! Welcome to HP SmartBot! How may I help you today?";
+        String greetingMessage = "Hello ! Welcome to HP SmartBot ! How may I help you today ?";
         return buildLexResponse(intentName, greetingMessage, "Fulfilled", sessionAttributesMap, null);
     }
 
     private Map<String, Object> handleFallBackIntent(String intentName, Map<String, Object> slots, Map<String, Object> sessionAttributesMap, Context context) {
-        String errorMessage = "I'm sorry, I couldn't understand your request. Could you please clarify your message?";
+        String errorMessage = "I'm sorry, I couldn't understand your request. Could you please clarify your message ?";
         return buildLexResponse(intentName, errorMessage, "Fulfilled", sessionAttributesMap, null);
     }
 
@@ -482,7 +475,6 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             dialogAction.put("type", "Close");
         }
 
-        // Define valid slot names based on the intent
         Set<String> validSlots = switch (intentName) {
             case "OrderHPItemIntent" ->
                     Set.of("Products", "ProductName", "ProductNumber", "Name", "ShippingAddress", "Email", "PaymentMethod", "CardNumber", "ExpirationDate", "CVV", "SuggestionResponse");
@@ -491,7 +483,6 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             default -> Set.of();
         };
 
-        // Only include session attributes that correspond to valid slot names for the current intent
         Map<String, Object> slots = new HashMap<>();
         for (String key : sessionAttributes.keySet()) {
             if (validSlots.contains(key)) {
@@ -533,7 +524,6 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             dialogAction.put("type", "Close");
         }
 
-        // Define valid slot names based on the intent
         Set<String> validSlots = switch (intentName) {
             case "OrderHPItemIntent" ->
                     Set.of("Products", "ProductName", "ProductNumber", "Name", "ShippingAddress", "Email", "PaymentMethod", "CardNumber", "ExpirationDate", "CVV", "SuggestionResponse");
@@ -542,7 +532,6 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             default -> Set.of();
         };
 
-        // Only include session attributes that correspond to valid slot names for the current intent
         Map<String, Object> slots = new HashMap<>();
         for (String key : sessionAttributes.keySet()) {
             if (validSlots.contains(key)) {
@@ -563,13 +552,11 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
 
         List<Map<String, Object>> messageList = new ArrayList<>();
 
-        // Add plain-text message
         messageList.add(Map.of(
                 "contentType", "PlainText",
                 "content", textMessage
         ));
 
-        // Add ImageResponseCard
         JsonNode content = card.get("content");
         ArrayNode buttons = (ArrayNode) content.get("buttons");
         List<Map<String, String>> buttonList = new ArrayList<>();
@@ -610,7 +597,6 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             dialogAction.put("slotToElicit", slotToElicit);
         }
 
-        // Prepare the card message
         JsonNode content = card.get("content");
         ArrayNode buttons = (ArrayNode) content.get("buttons");
 
@@ -642,7 +628,6 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
                 "sessionAttributes", sessionAttributes
         ));
 
-        // Only include the card in messages
         response.put("messages", new Object[] {
                 Map.of(
                         "contentType", "ImageResponseCard",
@@ -684,7 +669,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
         ArrayNode buttons = objectMapper.createArrayNode();
         ObjectNode button = objectMapper.createObjectNode();
         button.put("text", "View Item");
-        button.put("value", url); // The shortened URL is set directly as the button's value
+        button.put("value", url);
         buttons.add(button);
 
         content.set("buttons", buttons);
@@ -971,7 +956,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
         card.put("version", 1);
 
         ObjectNode content = objectMapper.createObjectNode();
-        content.put("title", "You may like this item as well!");
+        content.put("title", "You may like this item as well !");
         content.put("subtitle", description);
 
         ArrayNode buttons = objectMapper.createArrayNode();
@@ -991,14 +976,14 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
 
     private String getSuggestionDescription(String productType) {
         return switch (productType.toLowerCase()) {
-            case "laptop" -> "Boost your productivity with a docking station!";
-            case "tablet" -> "Enhance your tablet experience with a stylus!";
-            case "printer" -> "Keep your printer running with a new ink cartridge!";
-            case "touchpad" -> "Complement your touchpad with a wireless mouse!";
-            case "ipad" -> "Protect your device with a tablet case!";
-            case "computer" -> "Complete your setup with a high-quality monitor!";
-            case "p_c" -> "Upgrade your PC with a new keyboard!";
-            default -> "Explore more HP accessories to enhance your purchase!";
+            case "laptop" -> "Boost your productivity with a docking station !";
+            case "tablet" -> "Enhance your tablet experience with a stylus !";
+            case "printer" -> "Keep your printer running with a new ink cartridge !";
+            case "touchpad" -> "Complement your touchpad with a wireless mouse !";
+            case "ipad" -> "Protect your device with a tablet case !";
+            case "computer" -> "Complete your setup with a high-quality monitor !";
+            case "p_c" -> "Upgrade your PC with a new keyboard !";
+            default -> "Explore more HP accessories to enhance your purchase !";
         };
     }
 
