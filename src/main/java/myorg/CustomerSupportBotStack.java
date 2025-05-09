@@ -207,14 +207,14 @@ public class CustomerSupportBotStack extends Stack {
                 .description("Defines the payment method for an order")
                 .slotTypeValues(List.of(
                         CfnBot.SlotTypeValueProperty.builder()
-                                .sampleValue(CfnBot.SampleValueProperty.builder().value("card").build())
+                                .sampleValue(CfnBot.SampleValueProperty.builder().value("cash").build())
                                 .synonyms(List.of(
                                         CfnBot.SampleValueProperty.builder().value("pay on delivery").build(),
                                         CfnBot.SampleValueProperty.builder().value("cash on delivery").build()
                                         ))
                                 .build(),
                         CfnBot.SlotTypeValueProperty.builder()
-                                .sampleValue(CfnBot.SampleValueProperty.builder().value("cash").build())
+                                .sampleValue(CfnBot.SampleValueProperty.builder().value("card").build())
                                 .synonyms(List.of(
                                         CfnBot.SampleValueProperty.builder().value("pay online").build(),
                                         CfnBot.SampleValueProperty.builder().value("credit card").build()

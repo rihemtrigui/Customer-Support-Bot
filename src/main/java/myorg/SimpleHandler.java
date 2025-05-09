@@ -218,7 +218,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
         String expirationDate = null;
         String cvv = null;
 
-        if (paymentMethod.equalsIgnoreCase("online")) {
+        if (paymentMethod.equalsIgnoreCase("card")) {
             cardNumber = getOrRestoreSlot("CardNumber", slots, sessionAttributesMap, context);
             if (cardNumber == null || cardNumber.isEmpty()) {
                 return buildLexResponse(intentName, "Please provide your credit card number to complete the payment.", "InProgress", sessionAttributesMap, "CardNumber");
@@ -342,10 +342,10 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
                     urlCard
             );
         } else if ("no".equals(cleanResponse)) {
-            String finalMessage = "Okay, no problem. Thank you for your order!";
+            String finalMessage = "Okay, no problem. Thank you for your order !";
             return buildLexResponse(intentName, finalMessage, "Fulfilled", sessionAttributesMap, null);
         } else {
-            String finalMessage = "I didn't understand your response. Thank you for your order!";
+            String finalMessage = "I didn't understand your response. Thank you for your order !";
             return buildLexResponse(intentName, finalMessage, "Fulfilled", sessionAttributesMap, null);
         }
     }
@@ -395,7 +395,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
         if (action.equalsIgnoreCase("update_payment")) {
             String paymentMethod = orderItem.get("payment_method").s();
             context.getLogger().log("Processing update_payment for payment method: " + paymentMethod);
-            if (paymentMethod.equalsIgnoreCase("online")) {
+            if (paymentMethod.equalsIgnoreCase("card")) {
                 return buildLexResponse(intentName, "The order with number " + orderNumber + " has already been paid online.", "Fulfilled", sessionAttributesMap, null);
             } else if (paymentMethod.equalsIgnoreCase("cash")) {
                 String cardNumber = getOrRestoreSlot("CardNumber", slots, sessionAttributesMap, context);
@@ -424,7 +424,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
                             "InProgress", sessionAttributesMap, "CVV");
                 }
 
-                updatePaymentMethod(orderNumber, "online");
+                updatePaymentMethod(orderNumber, "card");
                 return buildLexResponse(intentName, "Your order has been paid successfully.", "Fulfilled", sessionAttributesMap, null);
             } else {
                 return buildLexResponse(intentName, "Unknown payment method for order " + orderNumber + ". Please contact support.", "Failed", sessionAttributesMap, null);
@@ -663,7 +663,7 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
         card.put("version", 1);
 
         ObjectNode content = objectMapper.createObjectNode();
-        content.put("title", "Check Out This Item!");
+        content.put("title", "Check Out This Item !");
         content.put("subtitle", "Click below to view the " + itemName + ".");
 
         ArrayNode buttons = objectMapper.createArrayNode();
