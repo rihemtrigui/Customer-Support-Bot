@@ -5,6 +5,8 @@ import software.amazon.awscdk.services.iam.*;
 import software.amazon.awscdk.services.lambda.*;
 import software.amazon.awscdk.services.dynamodb.*;
 import software.amazon.awscdk.services.lambda.Runtime;
+import software.amazon.awscdk.services.secretsmanager.Secret;
+import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
 import software.constructs.Construct;
 import software.amazon.awscdk.services.lex.CfnBot;
 import software.amazon.awscdk.services.lambda.Function;
@@ -20,6 +22,13 @@ public class CustomerSupportBotStack extends Stack {
         ITable Clients_Database = Table.fromTableName(this, "Clients_Database", "Clients_Database");
         IFunction RAGFAQHandler = Function.fromFunctionArn(this, "ImportedRAGFAQHandler",
                 "arn:aws:lambda:us-east-1:960673175457:function:faq_handler");
+        Secret apiKeySecret = Secret.Builder.create(this, "AlgobookApiKeySecret")
+                .secretName("customer-support-bot/algobook-api-key")
+                .description("API key for Algobook credit card validation")
+                .generateSecretString(SecretStringGenerator.builder()
+                        .secretStringTemplate("{\"apiKey\":\"6617961216msh17b4859478138bcp17d8f3jsn9ca072fb9a3d\"}")
+                        .build())
+                .build();
 
         Role lambdaRole = Role.Builder.create(this, "LambdaExecutionRole")
                 .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
@@ -55,6 +64,11 @@ public class CustomerSupportBotStack extends Stack {
                 .build());
         lambdaRole.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
+                .actions(List.of("secretsmanager:GetSecretValue"))
+                .resources(List.of(apiKeySecret.getSecretArn()))
+                .build());
+        lambdaRole.addToPolicy(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
                 .actions(List.of("bedrock:*"))
                 .resources(List.of("*"))
                 .build());
@@ -79,7 +93,8 @@ public class CustomerSupportBotStack extends Stack {
                 .role(lambdaRole)
                 .layers(List.of(layer))
                 .environment(Map.of(
-                        "DYNAMODB_TABLE_NAME", Clients_Database.getTableName()
+                        "DYNAMODB_TABLE_NAME", Clients_Database.getTableName(),
+                        "ALGOBOOK_API_KEY_SECRET_ARN", apiKeySecret.getSecretArn()
                 ))
                 .build();
         SimpleHandler.addPermission("LexInvokePermission",
@@ -211,14 +226,14 @@ public class CustomerSupportBotStack extends Stack {
                                 .synonyms(List.of(
                                         CfnBot.SampleValueProperty.builder().value("pay on delivery").build(),
                                         CfnBot.SampleValueProperty.builder().value("cash on delivery").build()
-                                        ))
+                                ))
                                 .build(),
                         CfnBot.SlotTypeValueProperty.builder()
                                 .sampleValue(CfnBot.SampleValueProperty.builder().value("card").build())
                                 .synonyms(List.of(
                                         CfnBot.SampleValueProperty.builder().value("pay online").build(),
                                         CfnBot.SampleValueProperty.builder().value("credit card").build()
-                                        ))
+                                ))
                                 .build()
                 ))
                 .valueSelectionSetting(CfnBot.SlotValueSelectionSettingProperty.builder()
@@ -452,13 +467,13 @@ public class CustomerSupportBotStack extends Stack {
         CfnBot.BotLocaleProperty botLocale = CfnBot.BotLocaleProperty.builder()
                 .localeId("en_US")
                 .nluConfidenceThreshold(0.7)
-                .slotTypes(List.of(actionSlotType, paymentMethodSlotType, expirationDateSlotType,productNameType,productNumberType,productsType,querySlotType))
+                .slotTypes(List.of(actionSlotType, paymentMethodSlotType, expirationDateSlotType, productNameType, productNumberType, productsType, querySlotType))
                 .intents(List.of(
                         createChangeOrderIntent(orderNumberSlot, actionTypeSlot, shippingAddressSlot, paymentMethodSlot,
                                 cvvSlot, expirationDateSlot, cardNumberSlot),
                         createOrderHPItemIntent(productsSlot, productNameSlot, paymentMethodSlot,
-                                clientNameSlot, shippingAddressSlot,emailSlot, cardNumberSlot, expirationDateSlot,
-                                cvvSlot,suggestionResponseSlot, productNumberSlot),
+                                clientNameSlot, shippingAddressSlot, emailSlot, cardNumberSlot, expirationDateSlot,
+                                cvvSlot, suggestionResponseSlot, productNumberSlot),
                         createFallbackIntent(),
                         createGreetingsIntent(),
                         createFAQIntent(querySlot)
@@ -477,6 +492,7 @@ public class CustomerSupportBotStack extends Stack {
                 .build();
 
     }
+
     private CfnBot.IntentProperty createFAQIntent(CfnBot.SlotProperty querySlot) {
         return CfnBot.IntentProperty.builder()
                 .name("FAQIntent")
@@ -519,15 +535,15 @@ public class CustomerSupportBotStack extends Stack {
     }
 
 
-    private CfnBot.IntentProperty createOrderHPItemIntent(CfnBot.SlotProperty productsSlot, CfnBot.SlotProperty productNameSlot , CfnBot.SlotProperty productNumberSlot ,
+    private CfnBot.IntentProperty createOrderHPItemIntent(CfnBot.SlotProperty productsSlot, CfnBot.SlotProperty productNameSlot, CfnBot.SlotProperty productNumberSlot,
                                                           CfnBot.SlotProperty paymentMethodSlot, CfnBot.SlotProperty cardNumberSlot, CfnBot.SlotProperty expirationDateSlot,
-                                                          CfnBot.SlotProperty cvvSlot,CfnBot.SlotProperty clientNameSlot,CfnBot.SlotProperty shippingAddressSlot,
-                                                          CfnBot.SlotProperty emailSlot, CfnBot.SlotProperty suggestionResponseSlot ) {
+                                                          CfnBot.SlotProperty cvvSlot, CfnBot.SlotProperty clientNameSlot, CfnBot.SlotProperty shippingAddressSlot,
+                                                          CfnBot.SlotProperty emailSlot, CfnBot.SlotProperty suggestionResponseSlot) {
         return CfnBot.IntentProperty.builder()
                 .name("OrderHPItemIntent")
                 .description("Handles ordering of HP items and payment processing")
-                .slots(List.of(productsSlot, productNameSlot ,productNumberSlot,paymentMethodSlot,cardNumberSlot, expirationDateSlot, cvvSlot,
-                        clientNameSlot,shippingAddressSlot,emailSlot,suggestionResponseSlot))
+                .slots(List.of(productsSlot, productNameSlot, productNumberSlot, paymentMethodSlot, cardNumberSlot, expirationDateSlot, cvvSlot,
+                        clientNameSlot, shippingAddressSlot, emailSlot, suggestionResponseSlot))
                 .slotPriorities(List.of(
                         CfnBot.SlotPriorityProperty.builder().priority(1).slotName("Products").build(),
                         CfnBot.SlotPriorityProperty.builder().priority(2).slotName("ProductName").build(),
@@ -540,7 +556,7 @@ public class CustomerSupportBotStack extends Stack {
                         CfnBot.SlotPriorityProperty.builder().priority(9).slotName("ExpirationDate").build(),
                         CfnBot.SlotPriorityProperty.builder().priority(10).slotName("CVV").build(),
                         CfnBot.SlotPriorityProperty.builder().priority(11).slotName("SuggestionResponse").build()
-                        ))
+                ))
                 .sampleUtterances(List.of(
                         CfnBot.SampleUtteranceProperty.builder().utterance("I want to order an HP item").build(),
                         CfnBot.SampleUtteranceProperty.builder().utterance("I want buy HP products").build(),
@@ -553,7 +569,7 @@ public class CustomerSupportBotStack extends Stack {
                         CfnBot.SampleUtteranceProperty.builder().utterance("I want to have a {ProductName}").build(),
                         CfnBot.SampleUtteranceProperty.builder().utterance("I want to order a {ProductName}").build()
 
-                        ))
+                ))
                 .dialogCodeHook(CfnBot.DialogCodeHookSettingProperty.builder()
                         .enabled(true)
                         .build())
@@ -563,11 +579,11 @@ public class CustomerSupportBotStack extends Stack {
                 .build();
     }
 
-    private CfnBot.IntentProperty createChangeOrderIntent(CfnBot.SlotProperty orderNumberSlot,CfnBot.SlotProperty actionTypeSlot,CfnBot.SlotProperty shippingAddressSlot,CfnBot.SlotProperty paymentMethodSlot,CfnBot.SlotProperty cvvSlot, CfnBot.SlotProperty expirationSlot, CfnBot.SlotProperty cardNumberSlot) {
+    private CfnBot.IntentProperty createChangeOrderIntent(CfnBot.SlotProperty orderNumberSlot, CfnBot.SlotProperty actionTypeSlot, CfnBot.SlotProperty shippingAddressSlot, CfnBot.SlotProperty paymentMethodSlot, CfnBot.SlotProperty cvvSlot, CfnBot.SlotProperty expirationSlot, CfnBot.SlotProperty cardNumberSlot) {
         return CfnBot.IntentProperty.builder()
                 .name("ChangeOrderIntent")
                 .description("Acts as a router for order modifications")
-                .slots(List.of(orderNumberSlot,actionTypeSlot,shippingAddressSlot,paymentMethodSlot,cvvSlot,expirationSlot,cardNumberSlot))
+                .slots(List.of(orderNumberSlot, actionTypeSlot, shippingAddressSlot, paymentMethodSlot, cvvSlot, expirationSlot, cardNumberSlot))
                 .slotPriorities(List.of(
                         CfnBot.SlotPriorityProperty.builder().priority(1).slotName("OrderNumber").build(),
                         CfnBot.SlotPriorityProperty.builder().priority(2).slotName("ActionType").build(),
@@ -593,7 +609,7 @@ public class CustomerSupportBotStack extends Stack {
                         CfnBot.SampleUtteranceProperty.builder().utterance("Change payment to {PaymentMethod}").build(),
                         CfnBot.SampleUtteranceProperty.builder().utterance("I want to pay {PaymentMethod} for order {OrderNumber}").build()
 
-                        ))
+                ))
                 .dialogCodeHook(CfnBot.DialogCodeHookSettingProperty.builder()
                         .enabled(true)
                         .build())

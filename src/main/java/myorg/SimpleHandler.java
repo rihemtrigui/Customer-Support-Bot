@@ -15,6 +15,9 @@ import software.amazon.awssdk.services.lambda.model.InvokeRequest;
 import software.amazon.awssdk.services.ses.SesClient;
 import software.amazon.awssdk.services.ses.model.*;
 import software.amazon.awssdk.services.lambda.LambdaClient;
+import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
+import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
+import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
 
 
 import java.io.PrintWriter;
@@ -31,14 +34,40 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
     private final DynamoDbClient dynamoDbClient = DynamoDbClient.create();
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final SesClient sesClient = SesClient.create();
+    private final SecretsManagerClient secretsManagerClient = SecretsManagerClient.create();
     private static final String FAQ_HANDLER_ARN = "arn:aws:lambda:us-east-1:960673175457:function:faq_handler";
     private static final String TABLE_NAME = "Clients_Database";
-    private static final String ALGOBOOK_API_KEY = "6617961216msh17b4859478138bcp17d8f3jsn9ca072fb9a3d";
     private static final String ALGOBOOK_API_HOST = "credit-card-validator2.p.rapidapi.com";
     private static final String SENDER_EMAIL = "noreply.hpassistance@gmail.com";
     private static final String RECEIVER_EMAIL = "triguirihem13@gmail.com";
     private static final ObjectMapper objectMapper = new ObjectMapper();
+    private String cachedApiKey = null;
 
+    private String getApiKey(Context context) {
+        if (cachedApiKey != null) {
+            return cachedApiKey;
+        }
+
+        try {
+            String secretArn = System.getenv("ALGOBOOK_API_KEY_SECRET_ARN");
+            if (secretArn == null || secretArn.isEmpty()) {
+                context.getLogger().log("ALGOBOOK_API_KEY_SECRET_ARN environment variable is missing");
+                throw new RuntimeException("Missing ALGOBOOK_API_KEY_SECRET_ARN");
+            }
+
+            GetSecretValueRequest request = GetSecretValueRequest.builder()
+                    .secretId(secretArn)
+                    .build();
+            GetSecretValueResponse response = secretsManagerClient.getSecretValue(request);
+            JsonNode secretJson = objectMapper.readTree(response.secretString());
+            cachedApiKey = secretJson.get("apiKey").asText();
+            context.getLogger().log("Successfully retrieved API key from Secrets Manager");
+            return cachedApiKey;
+        } catch (Exception e) {
+            context.getLogger().log("Error retrieving API key from Secrets Manager: " + e.getMessage());
+            throw new RuntimeException("Failed to retrieve API key", e);
+        }
+    }
     @Override
     public Map<String, Object> handleRequest(Map<String, Object> event, Context context) {
         ObjectMapper objectMapper = new ObjectMapper();
@@ -767,10 +796,12 @@ public class SimpleHandler implements RequestHandler<Map<String, Object>, Map<St
             context.getLogger().log("Request body: " + requestBody);
 
 
+            String apiKey = getApiKey(context);
+
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("https://credit-card-validator2.p.rapidapi.com/validate-credit-card"))
                     .header("X-RapidAPI-Host", ALGOBOOK_API_HOST)
-                    .header("X-RapidAPI-Key", ALGOBOOK_API_KEY)
+                    .header("X-RapidAPI-Key", apiKey)
                     .header("Content-Type", "application/json")
                     .method("POST", HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
