@@ -4,7 +4,7 @@ This project is an AWS-based application developed using the AWS Cloud Developme
 <img width="607" height="394" alt="Cloudairy project archi" src="https://github.com/user-attachments/assets/0690e5f6-9217-4375-a9b4-b57508a0ec3c" />
 
 ## Getting Started
-This is a blank project for CDK development with Java. The `cdk.json` file tells the CDK Toolkit how to execute your app. It is a Maven-based project, so you can open this project with any Maven-compatible Java IDE to build and run tests.
+This is a project for CDK development with Java. The `cdk.json` file tells the CDK Toolkit how to execute your app. It is a Maven-based project, so you can open this project with any Maven-compatible Java IDE to build and run tests.
 
 
 ### Useful Commands
